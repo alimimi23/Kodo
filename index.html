@@ -511,10 +511,20 @@ h1{font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.035em;color:va
 
       <div class="tres-section">
         <div class="tres-section-head">
+          <div>
+            <div class="tres-section-title">À vendre · actions à faire</div>
+            <div style="font-size:11px;color:var(--text-subtle);margin-top:2px">Articles sur lesquels tu dois agir (hors déjà vendus)</div>
+          </div>
+          <div class="tres-section-total" id="todoTotal">0 €</div>
+        </div>
+        <div id="todoList"></div>
+      </div>
+      <div class="tres-section">
+        <div class="tres-section-head">
           <div class="tres-section-title">Catégories d'entrées</div>
           <div class="tres-section-total" id="fluxCheckedTotal">0 € sélectionné</div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:8px" id="fluxCategories"></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px" id="fluxCategories"></div>
       </div>
 
       <div class="tres-section">
@@ -754,7 +764,7 @@ const SB_URL='https://xovjdmkoyasjwigrlhrq.supabase.co';
 const SB_KEY='sb_publishable_E_AzWR0KdYNaw6oBC5-l-g_F8R0sBPw';
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
 
-const S={user:null,bags:[],entries:[],expenses:[],meshItems:[],personalExpenses:[],balance:0,objStart:0,objFrozen:localStorage.getItem('kodo_objFrozen')==='1',objData:[],tasks:[],genTemplate:'',padlockLots:[],padlockSales:[],stockFilter:'all',stockBrand:'',stockPlatform:'',stockCondition:'',stockSort:'created_desc',stockSearch:'',calDate:new Date(),selectedDate:toISODate(new Date()),confirmCallback:null,currentBagId:null,pendingHidden:new Set(),pendingTimers:new Map(),pendingPadlocks:new Set(),pendingPadlockTimers:new Map(),fluxChecked:new Set(JSON.parse(localStorage.getItem('kodo_fluxChecked')||'[]')),fluxDeadline:localStorage.getItem('kodo_fluxDeadline')||'',currentFluxCat:null};
+const S={user:null,bags:[],entries:[],expenses:[],meshItems:[],personalExpenses:[],balance:0,objStart:0,objFrozen:localStorage.getItem('kodo_objFrozen')==='1',objData:[],tasks:[],genTemplate:'',padlockLots:[],padlockSales:[],stockFilter:'all',stockBrand:'',stockPlatform:'',stockCondition:'',stockSort:'created_desc',stockSearch:'',calDate:new Date(),selectedDate:toISODate(new Date()),confirmCallback:null,currentBagId:null,pendingHidden:new Set(),pendingTimers:new Map(),pendingPadlocks:new Set(),pendingPadlockTimers:new Map(),fluxChecked:new Set(JSON.parse(localStorage.getItem('kodo_fluxChecked')||'[]')),fluxLotQty:JSON.parse(localStorage.getItem('kodo_fluxLotQty')||'{}'),fluxDeadline:localStorage.getItem('kodo_fluxDeadline')||'',currentFluxCat:null};
 const MOIS=['Mai 2026','Juin 2026','Juillet 2026','Août 2026','Septembre 2026','Octobre 2026','Novembre 2026','Décembre 2026','Janvier 2027','Février 2027','Mars 2027','Avril 2027','Mai 2027','Juin 2027','Juillet 2027','Août 2027','Septembre 2027','Octobre 2027','Novembre 2027','Décembre 2027','Janvier 2028','Février 2028','Mars 2028','Avril 2028','Mai 2028','Juin 2028','Juillet 2028','Août 2028','Septembre 2028','Octobre 2028','Novembre 2028','Décembre 2028'];
 const DEFAULT_BRANDS=['Louis Vuitton','Céline','Gucci','Chanel','Dior'];
 function populateDatalists(){
@@ -1314,15 +1324,20 @@ function renderTasks(){
 
 /* ============ FLUX ============ */
 function saveFluxChecked(){localStorage.setItem('kodo_fluxChecked',JSON.stringify([...S.fluxChecked]))}
+function saveFluxLotQty(){localStorage.setItem('kodo_fluxLotQty',JSON.stringify(S.fluxLotQty))}
+function itemAmount(i){if(i.type==='lot'){const q=S.fluxLotQty[i.id]||0;return q*i.unitPrice}return parseFloat(i.amount||0)}
+function isItemChecked(i){if(i.type==='lot')return (S.fluxLotQty[i.id]||0)>0;return S.fluxChecked.has(i.id)}
 function fluxCategories(){
   const cats=[];
   // Sacs (stock + listés + vendus non encaissés)
   const sacItems=S.bags.filter(b=>b.status!=='sold'||!b.payment_received).map(b=>({id:'bag_'+b.id,label:`${b.brand} · ${b.model}${b.variant?' · '+b.variant:''}`,sub:b.status==='stock'?'En stock':b.status==='listed'?'Listé':'Vendu · en attente',amount:b.status==='sold'?(b.sold_price||0):(b.listed_price||b.target_price||0)}));
   cats.push({key:'sacs',label:'Sacs',icon:'👜',items:sacItems});
-  // Cadenas (lots + ventes en attente)
-  const lotItems=S.padlockLots.filter(l=>l.current_qty>0).map(l=>({id:'lot_'+l.id,label:l.name||'Lot',sub:`${l.current_qty} restants · ${Math.round(lotAvgPrice(l))}€/u`,amount:lotCurrentValue(l)}));
+  // Cadenas en stock (lots avec sélection qty)
+  const lotItems=S.padlockLots.filter(l=>l.current_qty>0).map(l=>({id:'lot_'+l.id,label:l.name||'Lot',sub:`${l.current_qty} restants · ${Math.round(lotAvgPrice(l))}€/u`,type:'lot',maxQty:l.current_qty,unitPrice:lotAvgPrice(l),amount:lotCurrentValue(l)}));
+  cats.push({key:'cadenas',label:'Cadenas (lots)',icon:'🔒',items:lotItems});
+  // Cadenas vendus (séparé)
   const lotSaleItems=S.padlockSales.filter(s=>!s.payment_received).map(s=>({id:'psale_'+s.id,label:`Cadenas n° ${s.padlock_number||'—'}`,sub:'Vendu · en attente',amount:s.sale_price||0}));
-  cats.push({key:'cadenas',label:'Cadenas',icon:'🔒',items:[...lotItems,...lotSaleItems]});
+  cats.push({key:'cadenas_vendus',label:'Cadenas vendus',icon:'✅',items:lotSaleItems});
   // Mesh
   const meshIt=S.meshItems.map(m=>({id:'mesh_'+m.id,label:m.description,sub:m.is_paid?'Vendu · fonds en attente':'À vendre',amount:m.amount||0}));
   cats.push({key:'mesh',label:'Mesh',icon:'📦',items:meshIt});
@@ -1333,8 +1348,17 @@ function fluxCategories(){
 }
 function fluxCheckedTotal(){
   let total=0;
-  fluxCategories().forEach(c=>c.items.forEach(i=>{if(S.fluxChecked.has(i.id))total+=parseFloat(i.amount||0)}));
+  fluxCategories().forEach(c=>c.items.forEach(i=>{if(isItemChecked(i))total+=itemAmount(i)}));
   return total;
+}
+function todoItems(){
+  // Trucs sur lesquels je dois agir pour vendre (hors vendus déjà)
+  const items=[];
+  S.bags.filter(b=>b.status==='stock').forEach(b=>items.push({icon:'👜',label:`${b.brand} · ${b.model}${b.variant?' · '+b.variant:''}`,sub:'À lister ou vendre',amount:b.target_price||0}));
+  S.bags.filter(b=>b.status==='listed').forEach(b=>items.push({icon:'🏷️',label:`${b.brand} · ${b.model}${b.variant?' · '+b.variant:''}`,sub:`Listé · ${b.listed_platform||''}`,amount:b.listed_price||b.target_price||0}));
+  S.padlockLots.filter(l=>l.current_qty>0).forEach(l=>items.push({icon:'🔒',label:l.name||'Lot cadenas',sub:`${l.current_qty} restants`,amount:lotCurrentValue(l)}));
+  S.meshItems.filter(m=>!m.is_paid).forEach(m=>items.push({icon:'📦',label:m.description,sub:'Mesh · à vendre',amount:m.amount||0}));
+  return items;
 }
 function fluxOutgoingBeforeDeadline(){
   if(!S.fluxDeadline)return {total:0,list:[]};
@@ -1369,19 +1393,30 @@ function renderFlux(){
   el('fluxDelta').textContent=(delta>=0?'+':'')+fmt(delta);
   el('fluxDelta').style.color=delta>=0?'var(--status-listed)':'var(--red)';
   el('fluxCheckedTotal').textContent='+'+fmt(checked)+' sélectionné';
+  // À vendre (todo list)
+  const todos=todoItems();
+  const todoTot=todos.reduce((a,i)=>a+parseFloat(i.amount||0),0);
+  el('todoTotal').textContent=fmt(todoTot);
+  if(!todos.length){el('todoList').innerHTML='<div class="empty" style="padding:20px">Rien à vendre.</div>'}
+  else{
+    el('todoList').innerHTML=todos.slice(0,10).map(t=>`<div class="tres-row">
+      <div class="tres-info"><div class="tres-desc">${t.icon} ${esc(t.label)}</div><div class="tres-meta">${esc(t.sub||'')}</div></div>
+      <div class="tres-amount pos" style="pointer-events:none">${fmt2(t.amount)}</div>
+    </div>`).join('')+(todos.length>10?`<div style="padding:12px;text-align:center;font-size:12px;color:var(--text-subtle)">+${todos.length-10} autres…</div>`:'');
+  }
   // Catégories
   const cats=fluxCategories();
   el('fluxCategories').innerHTML=cats.map(c=>{
     const total=c.items.reduce((a,i)=>a+parseFloat(i.amount||0),0);
-    const checkedCount=c.items.filter(i=>S.fluxChecked.has(i.id)).length;
-    const checkedAmt=c.items.filter(i=>S.fluxChecked.has(i.id)).reduce((a,i)=>a+parseFloat(i.amount||0),0);
+    const checkedCount=c.items.filter(i=>isItemChecked(i)).length;
+    const checkedAmt=c.items.filter(i=>isItemChecked(i)).reduce((a,i)=>a+itemAmount(i),0);
     return `<div class="action-btn" style="cursor:pointer;padding:18px" onclick="openFluxCat('${c.key}')">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:14px;font-weight:600">${c.icon} ${c.label}</span>
         <span style="font-size:11px;color:var(--text-subtle)">${c.items.length} items</span>
       </div>
       <div style="font-size:18px;font-weight:600;letter-spacing:-0.015em;color:var(--status-listed)">+${fmt(checkedAmt)}</div>
-      <div style="font-size:11px;color:var(--text-subtle);margin-top:2px">${checkedCount}/${c.items.length} cochés · total dispo ${fmt(total)}</div>
+      <div style="font-size:11px;color:var(--text-subtle);margin-top:2px">${checkedCount}/${c.items.length} sélectionné · total dispo ${fmt(total)}</div>
     </div>`;
   }).join('');
   // Sorties
@@ -1405,18 +1440,49 @@ function renderFluxCatModal(){
   const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;
   const list=el('fluxCatList');
   if(!cat.items.length){list.innerHTML='<div class="empty" style="padding:20px">Aucun item dans cette catégorie.</div>';el('fluxCatTotal').textContent='0 €';return}
-  list.innerHTML=cat.items.map(i=>`<div class="tres-row" style="cursor:pointer" onclick="toggleFluxItem('${i.id}')">
-    <div class="tres-check ${S.fluxChecked.has(i.id)?'checked':''}" style="pointer-events:none"></div>
-    <div class="tres-info"><div class="tres-desc">${esc(i.label)}</div><div class="tres-meta">${esc(i.sub||'')}</div></div>
-    <div class="tres-amount pos" style="pointer-events:none">${fmt2(i.amount)}</div>
-  </div>`).join('');
-  const total=cat.items.filter(i=>S.fluxChecked.has(i.id)).reduce((a,i)=>a+parseFloat(i.amount||0),0);
+  list.innerHTML=cat.items.map(i=>{
+    if(i.type==='lot'){
+      const q=S.fluxLotQty[i.id]||0;
+      return `<div class="tres-row">
+        <div class="tres-info"><div class="tres-desc">${esc(i.label)}</div><div class="tres-meta">${esc(i.sub||'')}</div></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" min="0" max="${i.maxQty}" value="${q}" style="width:70px;padding:5px 8px;text-align:center;font-size:13px;font-weight:600" data-lotid="${i.id}" class="flux-lot-qty"/>
+          <span style="font-size:11px;color:var(--text-subtle)">/${i.maxQty}</span>
+        </div>
+        <div class="tres-amount pos" style="pointer-events:none;min-width:80px;text-align:right">${fmt2(q*i.unitPrice)}</div>
+      </div>`;
+    }
+    return `<div class="tres-row" style="cursor:pointer" onclick="toggleFluxItem('${i.id}')">
+      <div class="tres-check ${S.fluxChecked.has(i.id)?'checked':''}" style="pointer-events:none"></div>
+      <div class="tres-info"><div class="tres-desc">${esc(i.label)}</div><div class="tres-meta">${esc(i.sub||'')}</div></div>
+      <div class="tres-amount pos" style="pointer-events:none">${fmt2(i.amount)}</div>
+    </div>`;
+  }).join('');
+  // Bind qty inputs
+  document.querySelectorAll('.flux-lot-qty').forEach(inp=>inp.oninput=e=>{
+    const id=inp.dataset.lotid;
+    let v=parseInt(e.target.value)||0;
+    const max=parseInt(inp.max)||0;
+    if(v<0)v=0;if(v>max)v=max;
+    e.target.value=v;
+    if(v>0)S.fluxLotQty[id]=v;else delete S.fluxLotQty[id];
+    saveFluxLotQty();
+    // Update amount cell inline
+    const row=inp.closest('.tres-row');
+    const amtCell=row.querySelector('.tres-amount');
+    const lot=cat.items.find(x=>x.id===id);
+    if(lot&&amtCell)amtCell.textContent=fmt2(v*lot.unitPrice);
+    const total=cat.items.filter(i=>isItemChecked(i)).reduce((a,i)=>a+itemAmount(i),0);
+    el('fluxCatTotal').textContent='+'+fmt(total);
+    renderFlux();
+  });
+  const total=cat.items.filter(i=>isItemChecked(i)).reduce((a,i)=>a+itemAmount(i),0);
   el('fluxCatTotal').textContent='+'+fmt(total);
 }
 window.toggleFluxItem=(id)=>{if(S.fluxChecked.has(id))S.fluxChecked.delete(id);else S.fluxChecked.add(id);saveFluxChecked();renderFluxCatModal();renderFlux()};
 el('fluxDeadline').oninput=e=>{S.fluxDeadline=e.target.value;localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline);renderFlux()};
-el('fluxCheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>S.fluxChecked.add(i.id));saveFluxChecked();renderFluxCatModal();renderFlux()};
-el('fluxUncheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>S.fluxChecked.delete(i.id));saveFluxChecked();renderFluxCatModal();renderFlux()};
+el('fluxCheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>{if(i.type==='lot')S.fluxLotQty[i.id]=i.maxQty;else S.fluxChecked.add(i.id)});saveFluxChecked();saveFluxLotQty();renderFluxCatModal();renderFlux()};
+el('fluxUncheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>{if(i.type==='lot')delete S.fluxLotQty[i.id];else S.fluxChecked.delete(i.id)});saveFluxChecked();saveFluxLotQty();renderFluxCatModal();renderFlux()};
 
 /* ============ MESH + SORTIES PERSO ============ */
 function meshTotal(){return S.meshItems.reduce((a,x)=>a+parseFloat(x.amount||0),0)}
