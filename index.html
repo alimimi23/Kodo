@@ -271,6 +271,7 @@ h1{font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.035em;color:va
         <button data-view="tasks">Tâches</button>
         <button data-view="padlocks">Cadenas</button>
         <button data-view="calc">Calculs</button>
+        <button data-view="flux">Flux</button>
       </nav>
       <div class="hdr-actions">
         <div class="user-badge" id="userBadge" title="Se déconnecter">
@@ -490,6 +491,44 @@ h1{font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.035em;color:va
       </div>
     </section>
 
+    <!-- FLUX -->
+    <section class="view" id="view-flux">
+      <div class="page-head">
+        <div><h1>Flux</h1><p class="sub">Projection : combien je peux récupérer avant une deadline</p></div>
+      </div>
+      <div class="tres-grid" style="grid-template-columns:1fr 1fr">
+        <div class="tres-card">
+          <div class="tres-card-label">Deadline</div>
+          <input type="date" id="fluxDeadline" style="width:100%;font-size:18px;font-weight:600;padding:8px 10px;margin-top:4px;text-align:left;border:none;background:transparent;color:var(--text)"/>
+          <p style="font-size:11.5px;color:var(--text-subtle);margin-top:4px" id="fluxDeadlineInfo">—</p>
+        </div>
+        <div class="tres-card">
+          <div class="tres-card-label">Tréso projetée à la deadline</div>
+          <div class="tres-card-value" id="fluxProjected">0 €</div>
+          <p style="font-size:11.5px;color:var(--text-subtle);margin-top:4px">Actuel <span id="fluxCurrent">0 €</span> · delta <span id="fluxDelta" style="font-weight:600">0 €</span></p>
+        </div>
+      </div>
+
+      <div class="tres-section">
+        <div class="tres-section-head">
+          <div class="tres-section-title">Catégories d'entrées</div>
+          <div class="tres-section-total" id="fluxCheckedTotal">0 € sélectionné</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:8px" id="fluxCategories"></div>
+      </div>
+
+      <div class="tres-section">
+        <div class="tres-section-head">
+          <div>
+            <div class="tres-section-title">Sorties à déduire</div>
+            <div style="font-size:11px;color:var(--text-subtle);margin-top:2px">Sorties non payées dont la date tombe avant la deadline</div>
+          </div>
+          <div class="tres-section-total" id="fluxOutTotal" style="color:var(--red)">-0 €</div>
+        </div>
+        <div id="fluxOutList"></div>
+      </div>
+    </section>
+
     <!-- CADENAS -->
     <section class="view" id="view-padlocks">
       <div class="page-head">
@@ -601,6 +640,23 @@ h1{font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.035em;color:va
   </div>
 </div>
 
+<div class="overlay" id="modalFluxCat">
+  <div class="modal" style="position:relative;max-width:620px">
+    <button class="close-x" data-close="modalFluxCat">✕</button>
+    <h2 id="fluxCatTitle">Catégorie</h2>
+    <p id="fluxCatSub" style="font-size:12.5px;color:var(--text-muted);margin-top:-12px">Coche ce que tu penses pouvoir encaisser avant la deadline.</p>
+    <div style="display:flex;gap:10px;margin:14px 0">
+      <button class="btn-ghost" id="fluxCheckAll" style="padding:6px 12px;font-size:12px">Tout cocher</button>
+      <button class="btn-ghost" id="fluxUncheckAll" style="padding:6px 12px;font-size:12px">Tout décocher</button>
+    </div>
+    <div id="fluxCatList" style="max-height:50vh;overflow-y:auto"></div>
+    <div style="margin-top:16px;padding:12px 14px;background:var(--accent-soft);border-radius:10px;display:flex;justify-content:space-between;font-size:13px">
+      <span style="color:var(--text-muted)">Sélectionné dans cette catégorie</span>
+      <span id="fluxCatTotal" style="font-weight:600;color:var(--status-listed)">0 €</span>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="modalMesh">
   <div class="modal" style="position:relative;max-width:620px">
     <button class="close-x" data-close="modalMesh">✕</button>
@@ -698,7 +754,7 @@ const SB_URL='https://xovjdmkoyasjwigrlhrq.supabase.co';
 const SB_KEY='sb_publishable_E_AzWR0KdYNaw6oBC5-l-g_F8R0sBPw';
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
 
-const S={user:null,bags:[],entries:[],expenses:[],meshItems:[],personalExpenses:[],balance:0,objStart:0,objFrozen:localStorage.getItem('kodo_objFrozen')==='1',objData:[],tasks:[],genTemplate:'',padlockLots:[],padlockSales:[],stockFilter:'all',stockBrand:'',stockPlatform:'',stockCondition:'',stockSort:'created_desc',stockSearch:'',calDate:new Date(),selectedDate:toISODate(new Date()),confirmCallback:null,currentBagId:null,pendingHidden:new Set(),pendingTimers:new Map(),pendingPadlocks:new Set(),pendingPadlockTimers:new Map()};
+const S={user:null,bags:[],entries:[],expenses:[],meshItems:[],personalExpenses:[],balance:0,objStart:0,objFrozen:localStorage.getItem('kodo_objFrozen')==='1',objData:[],tasks:[],genTemplate:'',padlockLots:[],padlockSales:[],stockFilter:'all',stockBrand:'',stockPlatform:'',stockCondition:'',stockSort:'created_desc',stockSearch:'',calDate:new Date(),selectedDate:toISODate(new Date()),confirmCallback:null,currentBagId:null,pendingHidden:new Set(),pendingTimers:new Map(),pendingPadlocks:new Set(),pendingPadlockTimers:new Map(),fluxChecked:new Set(JSON.parse(localStorage.getItem('kodo_fluxChecked')||'[]')),fluxDeadline:localStorage.getItem('kodo_fluxDeadline')||'',currentFluxCat:null};
 const MOIS=['Mai 2026','Juin 2026','Juillet 2026','Août 2026','Septembre 2026','Octobre 2026','Novembre 2026','Décembre 2026','Janvier 2027','Février 2027','Mars 2027','Avril 2027','Mai 2027','Juin 2027','Juillet 2027','Août 2027','Septembre 2027','Octobre 2027','Novembre 2027','Décembre 2027','Janvier 2028','Février 2028','Mars 2028','Avril 2028','Mai 2028','Juin 2028','Juillet 2028','Août 2028','Septembre 2028','Octobre 2028','Novembre 2028','Décembre 2028'];
 const DEFAULT_BRANDS=['Louis Vuitton','Céline','Gucci','Chanel','Dior'];
 function populateDatalists(){
@@ -1256,6 +1312,112 @@ function renderTasks(){
   }).join('')
 }
 
+/* ============ FLUX ============ */
+function saveFluxChecked(){localStorage.setItem('kodo_fluxChecked',JSON.stringify([...S.fluxChecked]))}
+function fluxCategories(){
+  const cats=[];
+  // Sacs (stock + listés + vendus non encaissés)
+  const sacItems=S.bags.filter(b=>b.status!=='sold'||!b.payment_received).map(b=>({id:'bag_'+b.id,label:`${b.brand} · ${b.model}${b.variant?' · '+b.variant:''}`,sub:b.status==='stock'?'En stock':b.status==='listed'?'Listé':'Vendu · en attente',amount:b.status==='sold'?(b.sold_price||0):(b.listed_price||b.target_price||0)}));
+  cats.push({key:'sacs',label:'Sacs',icon:'👜',items:sacItems});
+  // Cadenas (lots + ventes en attente)
+  const lotItems=S.padlockLots.filter(l=>l.current_qty>0).map(l=>({id:'lot_'+l.id,label:l.name||'Lot',sub:`${l.current_qty} restants · ${Math.round(lotAvgPrice(l))}€/u`,amount:lotCurrentValue(l)}));
+  const lotSaleItems=S.padlockSales.filter(s=>!s.payment_received).map(s=>({id:'psale_'+s.id,label:`Cadenas n° ${s.padlock_number||'—'}`,sub:'Vendu · en attente',amount:s.sale_price||0}));
+  cats.push({key:'cadenas',label:'Cadenas',icon:'🔒',items:[...lotItems,...lotSaleItems]});
+  // Mesh
+  const meshIt=S.meshItems.map(m=>({id:'mesh_'+m.id,label:m.description,sub:m.is_paid?'Vendu · fonds en attente':'À vendre',amount:m.amount||0}));
+  cats.push({key:'mesh',label:'Mesh',icon:'📦',items:meshIt});
+  // Autres entrées
+  const entIt=S.entries.filter(e=>!e.is_paid).map(e=>({id:'ent_'+e.id,label:e.description,sub:e.waiting_for_sale?'Fonds en attente':'À recevoir',amount:e.amount||0}));
+  cats.push({key:'autres',label:'Autres entrées',icon:'💰',items:entIt});
+  return cats;
+}
+function fluxCheckedTotal(){
+  let total=0;
+  fluxCategories().forEach(c=>c.items.forEach(i=>{if(S.fluxChecked.has(i.id))total+=parseFloat(i.amount||0)}));
+  return total;
+}
+function fluxOutgoingBeforeDeadline(){
+  if(!S.fluxDeadline)return {total:0,list:[]};
+  const dl=new Date(S.fluxDeadline);
+  const list=[];
+  let total=0;
+  S.expenses.forEach(e=>{
+    if(e.installments&&e.installments.length){
+      e.installments.forEach(i=>{if(!i.paid&&new Date(i.date)<=dl){total+=parseFloat(i.amount);list.push({label:e.description+' · échéance',date:i.date,amount:i.amount})}});
+    }else if(!e.is_paid&&e.date&&new Date(e.date)<=dl){
+      total+=parseFloat(e.amount||0);list.push({label:e.description,date:e.date,amount:e.amount||0});
+    }
+  });
+  // Sorties perso = toutes (récurrentes assumées)
+  S.personalExpenses.forEach(p=>{total+=parseFloat(p.amount||0);list.push({label:p.description+' (perso)',date:null,amount:p.amount||0})});
+  return {total,list};
+}
+function renderFlux(){
+  if(!S.fluxDeadline){const d=new Date();d.setDate(d.getDate()+30);S.fluxDeadline=toISODate(d);localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline)}
+  el('fluxDeadline').value=S.fluxDeadline;
+  const dl=new Date(S.fluxDeadline);
+  const days=Math.ceil((dl-new Date())/86400000);
+  el('fluxDeadlineInfo').textContent=days>0?`Dans ${days} jours (${dl.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})})`:days===0?'Aujourd\'hui':`Il y a ${-days} jours`;
+  const current=S.balance;
+  const checked=fluxCheckedTotal();
+  const out=fluxOutgoingBeforeDeadline();
+  const projected=current+checked-out.total;
+  const delta=projected-current;
+  el('fluxCurrent').textContent=fmt(current);
+  el('fluxProjected').textContent=fmt(projected);
+  el('fluxProjected').style.color=projected>=0?'var(--text)':'var(--red)';
+  el('fluxDelta').textContent=(delta>=0?'+':'')+fmt(delta);
+  el('fluxDelta').style.color=delta>=0?'var(--status-listed)':'var(--red)';
+  el('fluxCheckedTotal').textContent='+'+fmt(checked)+' sélectionné';
+  // Catégories
+  const cats=fluxCategories();
+  el('fluxCategories').innerHTML=cats.map(c=>{
+    const total=c.items.reduce((a,i)=>a+parseFloat(i.amount||0),0);
+    const checkedCount=c.items.filter(i=>S.fluxChecked.has(i.id)).length;
+    const checkedAmt=c.items.filter(i=>S.fluxChecked.has(i.id)).reduce((a,i)=>a+parseFloat(i.amount||0),0);
+    return `<div class="action-btn" style="cursor:pointer;padding:18px" onclick="openFluxCat('${c.key}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:14px;font-weight:600">${c.icon} ${c.label}</span>
+        <span style="font-size:11px;color:var(--text-subtle)">${c.items.length} items</span>
+      </div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.015em;color:var(--status-listed)">+${fmt(checkedAmt)}</div>
+      <div style="font-size:11px;color:var(--text-subtle);margin-top:2px">${checkedCount}/${c.items.length} cochés · total dispo ${fmt(total)}</div>
+    </div>`;
+  }).join('');
+  // Sorties
+  el('fluxOutTotal').textContent='-'+fmt(out.total);
+  if(!out.list.length){el('fluxOutList').innerHTML='<div class="empty" style="padding:20px">Aucune sortie à déduire.</div>'}
+  else{
+    el('fluxOutList').innerHTML=out.list.map(o=>`<div class="tres-row" style="opacity:0.8">
+      <div class="tres-info"><div class="tres-desc">${esc(o.label)}</div>${o.date?'<div class="tres-meta">'+new Date(o.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+'</div>':''}</div>
+      <div class="tres-amount neg" style="pointer-events:none">-${fmt2(o.amount)}</div>
+    </div>`).join('');
+  }
+}
+window.openFluxCat=(key)=>{
+  S.currentFluxCat=key;
+  const cat=fluxCategories().find(c=>c.key===key);
+  if(!cat)return;
+  el('fluxCatTitle').textContent=cat.icon+' '+cat.label;
+  renderFluxCatModal();openModal('modalFluxCat');
+};
+function renderFluxCatModal(){
+  const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;
+  const list=el('fluxCatList');
+  if(!cat.items.length){list.innerHTML='<div class="empty" style="padding:20px">Aucun item dans cette catégorie.</div>';el('fluxCatTotal').textContent='0 €';return}
+  list.innerHTML=cat.items.map(i=>`<div class="tres-row" style="cursor:pointer" onclick="toggleFluxItem('${i.id}')">
+    <div class="tres-check ${S.fluxChecked.has(i.id)?'checked':''}" style="pointer-events:none"></div>
+    <div class="tres-info"><div class="tres-desc">${esc(i.label)}</div><div class="tres-meta">${esc(i.sub||'')}</div></div>
+    <div class="tres-amount pos" style="pointer-events:none">${fmt2(i.amount)}</div>
+  </div>`).join('');
+  const total=cat.items.filter(i=>S.fluxChecked.has(i.id)).reduce((a,i)=>a+parseFloat(i.amount||0),0);
+  el('fluxCatTotal').textContent='+'+fmt(total);
+}
+window.toggleFluxItem=(id)=>{if(S.fluxChecked.has(id))S.fluxChecked.delete(id);else S.fluxChecked.add(id);saveFluxChecked();renderFluxCatModal();renderFlux()};
+el('fluxDeadline').oninput=e=>{S.fluxDeadline=e.target.value;localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline);renderFlux()};
+el('fluxCheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>S.fluxChecked.add(i.id));saveFluxChecked();renderFluxCatModal();renderFlux()};
+el('fluxUncheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>S.fluxChecked.delete(i.id));saveFluxChecked();renderFluxCatModal();renderFlux()};
+
 /* ============ MESH + SORTIES PERSO ============ */
 function meshTotal(){return S.meshItems.reduce((a,x)=>a+parseFloat(x.amount||0),0)}
 function persoExpTotal(){return S.personalExpenses.reduce((a,x)=>a+parseFloat(x.amount||0),0)}
@@ -1455,7 +1617,7 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.
 document.querySelectorAll('.overlay').forEach(o=>o.onclick=e=>{if(e.target===o)o.classList.remove('open')});
 
 /* ============ INIT ============ */
-function renderAll(){renderStock();renderTreso();renderObj();renderCal();renderTasks();renderPadlocks();populateGenStock();populateTaskBags();populateDatalists();updateFreezeBtn();initCalculs();if(S.genTemplate)el('genTemplate').value=S.genTemplate}
+function renderAll(){renderStock();renderTreso();renderObj();renderCal();renderTasks();renderPadlocks();renderFlux();populateGenStock();populateTaskBags();populateDatalists();updateFreezeBtn();initCalculs();if(S.genTemplate)el('genTemplate').value=S.genTemplate}
 window.addEventListener('resize',renderTrendChart);
 checkAuth();
 </script>
