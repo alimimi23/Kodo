@@ -1427,7 +1427,8 @@ function renderFlux(){
   // À vendre (todo list) : items cochés manuellement, non vendus
   const todos=todoItems();
   const todoTot=todos.reduce((a,i)=>a+(i.displayAmt||0),0);
-  el('todoTotal').textContent=fmt(todoTot);
+  // Total net affiché = reste à faire (items cochés - sorties à déduire)
+  el('todoTotal').textContent=fmt(todoTot-out.total);
   if(!todos.length){el('todoList').innerHTML='<div class="empty" style="padding:20px">Rien de sélectionné à vendre. Coche des items dans les catégories ci-dessous.</div>'}
   else{
     el('todoList').innerHTML=todos.map(t=>`<div class="tres-row">
