@@ -505,7 +505,11 @@ h1{font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.035em;color:va
         <div class="tres-card">
           <div class="tres-card-label">Tréso projetée à la deadline</div>
           <div class="tres-card-value" id="fluxProjected">0 €</div>
-          <p style="font-size:11.5px;color:var(--text-subtle);margin-top:4px">Actuel <span id="fluxCurrent">0 €</span> · delta <span id="fluxDelta" style="font-weight:600">0 €</span></p>
+          <div style="margin-top:10px;height:6px;background:var(--accent-soft);border-radius:3px;overflow:hidden">
+            <div id="fluxBar" style="height:100%;background:var(--status-listed);width:0%;transition:width 0.4s"></div>
+          </div>
+          <p style="font-size:11.5px;color:var(--text-subtle);margin-top:6px">Actuel <span id="fluxCurrent" style="color:var(--text)">0 €</span> · delta <span id="fluxDelta" style="font-weight:600">0 €</span></p>
+          <p style="font-size:10.5px;color:var(--text-subtle);margin-top:2px" id="fluxBarInfo">—</p>
         </div>
       </div>
 
@@ -1107,6 +1111,7 @@ function renderTreso(){
     }
   }
   renderTrendChart();
+  if(el('view-flux')&&typeof renderFlux==='function')try{renderFlux()}catch(_){}
 }
 function toastWithCancel(msg,onCancel){
   const t=document.createElement('div');t.className='toast';
@@ -1355,6 +1360,16 @@ function fluxCheckedTotal(){
   fluxCategories().forEach(c=>c.items.forEach(i=>{if(isItemChecked(i))total+=itemAmount(i)}));
   return total;
 }
+function fluxLockedTotal(){
+  let total=0;
+  fluxCategories().forEach(c=>c.items.forEach(i=>{if(i.locked)total+=parseFloat(i.amount||0)}));
+  return total;
+}
+function fluxManualCheckedTotal(){
+  let total=0;
+  fluxCategories().forEach(c=>c.items.forEach(i=>{if(!i.locked&&isItemChecked(i))total+=itemAmount(i)}));
+  return total;
+}
 function todoItems(){
   // Items cochés manuellement et non vendus → actions à faire
   const items=[];
@@ -1389,17 +1404,26 @@ function renderFlux(){
   const dl=new Date(S.fluxDeadline);
   const days=Math.ceil((dl-new Date())/86400000);
   el('fluxDeadlineInfo').textContent=days>0?`Dans ${days} jours (${dl.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})})`:days===0?'Aujourd\'hui':`Il y a ${-days} jours`;
-  const current=S.balance;
-  const checked=fluxCheckedTotal();
+  const current=S.balance+fluxLockedTotal();
+  const checkedManual=fluxManualCheckedTotal();
   const out=fluxOutgoingBeforeDeadline();
-  const projected=current+checked-out.total;
+  const projected=current+checkedManual-out.total;
   const delta=projected-current;
   el('fluxCurrent').textContent=fmt(current);
   el('fluxProjected').textContent=fmt(projected);
   el('fluxProjected').style.color=projected>=0?'var(--text)':'var(--red)';
   el('fluxDelta').textContent=(delta>=0?'+':'')+fmt(delta);
   el('fluxDelta').style.color=delta>=0?'var(--status-listed)':'var(--red)';
-  el('fluxCheckedTotal').textContent='+'+fmt(checked)+' sélectionné';
+  el('fluxCheckedTotal').textContent='+'+fmt(checkedManual)+' sélectionné';
+  // Barre de progression
+  const bar=el('fluxBar');
+  if(bar){
+    const target=Math.max(current,projected,1);
+    const pct=Math.min(100,Math.max(0,(current/target)*100));
+    bar.style.width=pct+'%';
+    bar.style.background=delta>=0?'var(--status-listed)':'var(--red)';
+    el('fluxBarInfo').textContent=delta>=0?`Déjà acquis ${fmt(current)} · reste à faire ${fmt(delta)}`:`Attention · sorties excèdent les entrées de ${fmt(-delta)}`;
+  }
   // À vendre (todo list) : items cochés manuellement, non vendus
   const todos=todoItems();
   const todoTot=todos.reduce((a,i)=>a+(i.displayAmt||0),0);
