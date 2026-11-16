@@ -1049,8 +1049,8 @@ function renderTreso(){
       <div class="tres-amount pos">${fmt2(b.sold_price)}</div>
     </div>`).join('')
   }
-  const eList=el('entriesList');const active=S.entries.filter(x=>!x.is_paid);
-  const entriesRealTotal=active.reduce((a,x)=>a+parseFloat(x.amount),0);
+  const eList=el('entriesList');
+  const entriesRealTotal=S.entries.reduce((a,x)=>a+parseFloat(x.amount),0);
   const meshT=meshTotal();
   const entriesTotal=entriesRealTotal+meshT;
   el('entriesTotal').textContent=fmt(entriesTotal);
@@ -1058,11 +1058,11 @@ function renderTreso(){
   if(!S.entries.length&&!meshT){eList.innerHTML=meshLine||'<div class="empty" style="padding:30px">Aucune entrée en attente.</div>'}
   else{
     eList.innerHTML=meshLine+S.entries.sort((a,b)=>a.is_paid-b.is_paid).map(e=>`
-      <div class="tres-row" style="${e.is_paid?'opacity:0.5':''}">
-        <div class="tres-check ${e.is_paid?'checked':''}" onclick="toggleEntryReceived('${e.id}')"></div>
-        <div class="tres-info"><div class="tres-desc">${esc(e.description)}${e.waiting_for_sale?'<span class="badge badge-wait">À vendre</span>':''}</div></div>
+      <div class="tres-row">
+        <div class="tres-check ${e.is_paid?'checked':''}" onclick="toggleEntryReceived('${e.id}')" title="${e.is_paid?'Décocher':'Marquer vendu'}"></div>
+        <div class="tres-info"><div class="tres-desc">${esc(e.description)}${e.is_paid?'<span class="badge badge-wait">Vendu · fonds en attente</span>':''}${e.waiting_for_sale&&!e.is_paid?'<span class="badge badge-wait">À vendre</span>':''}</div></div>
         <div class="tres-amount pos" onclick="editEntry('${e.id}')">${fmt2(e.amount)}</div>
-        <div class="tres-actions"><button class="icon-btn danger" onclick="delEntry('${e.id}')">✕</button></div>
+        <div class="tres-actions"><button class="icon-btn danger" onclick="delEntry('${e.id}')" title="Encaissé · retirer">✕</button></div>
       </div>
     `).join('')
   }
@@ -1131,12 +1131,11 @@ window.markSaleReceived=(id)=>{
 };
 window.toggleEntryReceived=async(id)=>{
   const e=S.entries.find(x=>x.id===id);const newPaid=!e.is_paid;
-  const newBal=S.balance+(newPaid?parseFloat(e.amount):-parseFloat(e.amount));
   const {error}=await sb.from('transactions').update({is_paid:newPaid}).eq('id',id);
   if(error){toast('Erreur: '+error.message);return}
-  e.is_paid=newPaid;S.balance=newBal;
-  await sb.from('account_balance').upsert({user_id:S.user.id,balance:newBal,updated_at:new Date().toISOString()});
+  e.is_paid=newPaid;
   renderTreso();
+  if(newPaid)toast('Marqué vendu · pense à ajouter au compte');
 };
 window.delEntry=(id)=>{confirmDialog('Supprimer l\'entrée','Cette action est définitive.',async()=>{const {error}=await sb.from('transactions').delete().eq('id',id);if(error){toast('Erreur: '+error.message);return}S.entries=S.entries.filter(x=>x.id!==id);renderTreso();toast('Entrée supprimée')})};
 window.editEntry=async(id)=>{const e=S.entries.find(x=>x.id===id);const v=prompt('Nouveau montant (€)',e.amount);if(v===null)return;const n=parseFloat(v);if(isNaN(n))return;const {error}=await sb.from('transactions').update({amount:n}).eq('id',id);if(error){toast('Erreur: '+error.message);return}e.amount=n;renderTreso();toast('Montant mis à jour')};
@@ -1346,8 +1345,8 @@ function fluxCategories(){
   // Mesh : à vendre (normaux) + vendus (locked)
   const meshIt=S.meshItems.map(m=>({id:'mesh_'+m.id,label:m.description,sub:m.is_paid?'Vendu · fonds en attente':'À vendre',amount:m.amount||0,locked:!!m.is_paid}));
   cats.push({key:'mesh',label:'Mesh',icon:'📦',items:meshIt});
-  // Autres entrées : à recevoir (normaux) + fonds en attente (locked)
-  const entIt=S.entries.filter(e=>!e.is_paid).map(e=>({id:'ent_'+e.id,label:e.description,sub:e.waiting_for_sale?'Fonds en attente':'À recevoir',amount:e.amount||0,locked:!!e.waiting_for_sale}));
+  // Autres entrées : à recevoir (normaux) + fonds en attente / vendues (locked)
+  const entIt=S.entries.map(e=>({id:'ent_'+e.id,label:e.description,sub:e.is_paid?'Vendu · fonds en attente':(e.waiting_for_sale?'Fonds en attente':'À recevoir'),amount:e.amount||0,locked:!!(e.is_paid||e.waiting_for_sale)}));
   cats.push({key:'autres',label:'Autres entrées',icon:'💰',items:entIt});
   return cats;
 }
