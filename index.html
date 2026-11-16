@@ -845,6 +845,11 @@ async function loadAllData(){
     localStorage.setItem('kodo_fluxLotQty',JSON.stringify(S.fluxLotQty));
     if(S.fluxDeadline)localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline);
     localStorage.setItem('kodo_objFrozen',S.objFrozen?'1':'0');
+  }else{
+    // Pas de prefs en DB → migrer localStorage vers Supabase
+    if(S.fluxChecked.size>0||Object.keys(S.fluxLotQty).length>0||S.fluxDeadline||S.objFrozen){
+      try{await sb.from('user_prefs').upsert({user_id:uid,flux_checked:[...S.fluxChecked],flux_lot_qty:S.fluxLotQty,flux_deadline:S.fluxDeadline||null,obj_frozen:S.objFrozen,updated_at:new Date().toISOString()},{onConflict:'user_id'})}catch(e){}
+    }
   }
   S.bags=bagsRes.data||[];
   const tx=txRes.data||[];
