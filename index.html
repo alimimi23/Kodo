@@ -822,7 +822,7 @@ sb.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session&&!S.
 /* ============ LOAD DATA ============ */
 async function loadAllData(){
   const uid=S.user.id;
-  const [bagsRes,txRes,balRes,objRes,tasksRes,tplRes,lotsRes,salesRes]=await Promise.all([
+  const [bagsRes,txRes,balRes,objRes,tasksRes,tplRes,lotsRes,salesRes,prefsRes]=await Promise.all([
     sb.from('bags').select('*').order('created_at',{ascending:false}),
     sb.from('transactions').select('*').order('created_at',{ascending:false}),
     sb.from('account_balance').select('*').eq('user_id',uid).maybeSingle(),
@@ -830,10 +830,22 @@ async function loadAllData(){
     sb.from('tasks').select('*').order('created_at',{ascending:false}),
     sb.from('generator_templates').select('*').eq('is_default',true).maybeSingle(),
     sb.from('padlock_lots').select('*').order('created_at',{ascending:false}),
-    sb.from('padlock_sales').select('*').order('created_at',{ascending:false})
+    sb.from('padlock_sales').select('*').order('created_at',{ascending:false}),
+    sb.from('user_prefs').select('*').eq('user_id',uid).maybeSingle()
   ]);
   S.padlockLots=lotsRes.data||[];
   S.padlockSales=salesRes.data||[];
+  if(prefsRes.data){
+    S.fluxChecked=new Set(prefsRes.data.flux_checked||[]);
+    S.fluxLotQty=prefsRes.data.flux_lot_qty||{};
+    if(prefsRes.data.flux_deadline)S.fluxDeadline=prefsRes.data.flux_deadline;
+    S.objFrozen=!!prefsRes.data.obj_frozen;
+    // Sync localStorage pour cohérence
+    localStorage.setItem('kodo_fluxChecked',JSON.stringify([...S.fluxChecked]));
+    localStorage.setItem('kodo_fluxLotQty',JSON.stringify(S.fluxLotQty));
+    if(S.fluxDeadline)localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline);
+    localStorage.setItem('kodo_objFrozen',S.objFrozen?'1':'0');
+  }
   S.bags=bagsRes.data||[];
   const tx=txRes.data||[];
   S.entries=tx.filter(t=>t.type==='entry');
@@ -1249,7 +1261,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 el('objStart').oninput=e=>{S.objStart=parseFloat(e.target.value)||0;clearTimeout(objTimer);objTimer=setTimeout(async()=>{await sb.from('objectives').upsert({user_id:S.user.id,month_index:0,sorties:S.objData[0].sorties||0,revenu:S.objData[0].revenu||0,autre_revenu:S.objData[0].autre_revenu||0,formation:S.objData[0].formation||0,charges:S.objData[0].charges||0,starting_balance:S.objStart},{onConflict:'user_id,month_index'})},400);renderObj()};
 function updateFreezeBtn(){const b=el('btnFreeze');if(!b)return;b.innerHTML=S.objFrozen?'🔒 Figé':'🔓 Geler';b.style.color=S.objFrozen?'var(--status-listed)':'var(--text)';b.style.borderColor=S.objFrozen?'var(--status-listed)':'var(--border)'}
-document.addEventListener('DOMContentLoaded',()=>{const b=document.getElementById('btnFreeze');if(b)b.onclick=()=>{S.objFrozen=!S.objFrozen;localStorage.setItem('kodo_objFrozen',S.objFrozen?'1':'0');updateFreezeBtn();if(!S.objFrozen)renderTreso();toast(S.objFrozen?'Valeur figée':'Auto-sync activé')}});
+document.addEventListener('DOMContentLoaded',()=>{const b=document.getElementById('btnFreeze');if(b)b.onclick=()=>{S.objFrozen=!S.objFrozen;localStorage.setItem('kodo_objFrozen',S.objFrozen?'1':'0');syncPrefs();updateFreezeBtn();if(!S.objFrozen)renderTreso();toast(S.objFrozen?'Valeur figée':'Auto-sync activé')}});
 
 /* ============ GENERATOR ============ */
 let genTimer;
@@ -1327,8 +1339,16 @@ function renderTasks(){
 }
 
 /* ============ FLUX ============ */
-function saveFluxChecked(){localStorage.setItem('kodo_fluxChecked',JSON.stringify([...S.fluxChecked]))}
-function saveFluxLotQty(){localStorage.setItem('kodo_fluxLotQty',JSON.stringify(S.fluxLotQty))}
+let prefsTimer;
+function syncPrefs(){
+  clearTimeout(prefsTimer);
+  prefsTimer=setTimeout(async()=>{
+    if(!S.user)return;
+    try{await sb.from('user_prefs').upsert({user_id:S.user.id,flux_checked:[...S.fluxChecked],flux_lot_qty:S.fluxLotQty,flux_deadline:S.fluxDeadline||null,obj_frozen:S.objFrozen,updated_at:new Date().toISOString()},{onConflict:'user_id'})}catch(e){}
+  },500);
+}
+function saveFluxChecked(){localStorage.setItem('kodo_fluxChecked',JSON.stringify([...S.fluxChecked]));syncPrefs()}
+function saveFluxLotQty(){localStorage.setItem('kodo_fluxLotQty',JSON.stringify(S.fluxLotQty));syncPrefs()}
 function itemAmount(i){if(i.type==='lot'){const q=S.fluxLotQty[i.id]||0;return q*i.unitPrice}return parseFloat(i.amount||0)}
 function isItemChecked(i){if(i.locked)return true;if(i.type==='lot')return (S.fluxLotQty[i.id]||0)>0;return S.fluxChecked.has(i.id)}
 function fluxCategories(){
@@ -1399,7 +1419,7 @@ function fluxOutgoingBeforeDeadline(){
   return {total,list};
 }
 function renderFlux(){
-  if(!S.fluxDeadline){const d=new Date();d.setDate(d.getDate()+30);S.fluxDeadline=toISODate(d);localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline)}
+  if(!S.fluxDeadline){const d=new Date();d.setDate(d.getDate()+30);S.fluxDeadline=toISODate(d);localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline);syncPrefs()}
   el('fluxDeadline').value=S.fluxDeadline;
   const dl=new Date(S.fluxDeadline);
   const days=Math.ceil((dl-new Date())/86400000);
@@ -1427,8 +1447,10 @@ function renderFlux(){
   // À vendre (todo list) : items cochés manuellement, non vendus
   const todos=todoItems();
   const todoTot=todos.reduce((a,i)=>a+(i.displayAmt||0),0);
-  // Total net affiché = reste à faire (items cochés - sorties à déduire)
-  el('todoTotal').textContent=fmt(todoTot-out.total);
+  // Total net affiché = reste à faire (items cochés - sorties à déduire), 0 si rien coché
+  const netTodo=todos.length?(todoTot-out.total):0;
+  el('todoTotal').textContent=fmt(netTodo);
+  el('todoTotal').style.color=netTodo>=0?'var(--status-listed)':'var(--red)';
   if(!todos.length){el('todoList').innerHTML='<div class="empty" style="padding:20px">Rien de sélectionné à vendre. Coche des items dans les catégories ci-dessous.</div>'}
   else{
     el('todoList').innerHTML=todos.map(t=>`<div class="tres-row">
@@ -1521,7 +1543,7 @@ function renderFluxCatModal(){
   el('fluxCatTotal').textContent='+'+fmt(total);
 }
 window.toggleFluxItem=(id)=>{if(S.fluxChecked.has(id))S.fluxChecked.delete(id);else S.fluxChecked.add(id);saveFluxChecked();renderFluxCatModal();renderFlux()};
-el('fluxDeadline').oninput=e=>{S.fluxDeadline=e.target.value;localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline);renderFlux()};
+el('fluxDeadline').oninput=e=>{S.fluxDeadline=e.target.value;localStorage.setItem('kodo_fluxDeadline',S.fluxDeadline);syncPrefs();renderFlux()};
 el('fluxCheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>{if(i.locked)return;if(i.type==='lot')S.fluxLotQty[i.id]=i.maxQty;else S.fluxChecked.add(i.id)});saveFluxChecked();saveFluxLotQty();renderFluxCatModal();renderFlux()};
 el('fluxUncheckAll').onclick=()=>{const cat=fluxCategories().find(c=>c.key===S.currentFluxCat);if(!cat)return;cat.items.forEach(i=>{if(i.locked)return;if(i.type==='lot')delete S.fluxLotQty[i.id];else S.fluxChecked.delete(i.id)});saveFluxChecked();saveFluxLotQty();renderFluxCatModal();renderFlux()};
 
