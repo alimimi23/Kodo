@@ -1856,9 +1856,16 @@ el('sellPadlockSave').onclick=async()=>{
   const {error:e2}=await sb.from('padlock_lots').update({current_qty:newQty}).eq('id',lotId);
   if(e2){toast('Erreur maj lot: '+e2.message);return}
   lot.current_qty=newQty;
-  closeModal('modalSellPadlock');renderPadlocks();renderTreso();toast('Cadenas vendu 🎉');
+  // Décrémenter la sélection Flux pour ce lot (évite le double comptage)
+  const fluxKey='lot_'+lotId;
+  if(S.fluxLotQty[fluxKey]>0){
+    S.fluxLotQty[fluxKey]=Math.max(0,S.fluxLotQty[fluxKey]-1);
+    if(S.fluxLotQty[fluxKey]===0)delete S.fluxLotQty[fluxKey];
+    saveFluxLotQty();
+  }
+  closeModal('modalSellPadlock');renderPadlocks();renderTreso();renderFlux();renderStats();toast('Cadenas vendu 🎉');
 };
-window.delPadlockSale=(id)=>{confirmDialog('Supprimer la vente','Le lot sera incrémenté de 1.',async()=>{const s=S.padlockSales.find(x=>x.id===id);if(!s)return;const lot=S.padlockLots.find(l=>l.id===s.lot_id);const {error}=await sb.from('padlock_sales').delete().eq('id',id);if(error){toast('Erreur: '+error.message);return}S.padlockSales=S.padlockSales.filter(x=>x.id!==id);if(lot){const newQty=lot.current_qty+1;await sb.from('padlock_lots').update({current_qty:newQty}).eq('id',lot.id);lot.current_qty=newQty}renderPadlocks();renderTreso();toast('Vente supprimée')})};
+window.delPadlockSale=(id)=>{confirmDialog('Supprimer la vente','Le lot sera incrémenté de 1.',async()=>{const s=S.padlockSales.find(x=>x.id===id);if(!s)return;const lot=S.padlockLots.find(l=>l.id===s.lot_id);const {error}=await sb.from('padlock_sales').delete().eq('id',id);if(error){toast('Erreur: '+error.message);return}S.padlockSales=S.padlockSales.filter(x=>x.id!==id);if(lot){const newQty=lot.current_qty+1;await sb.from('padlock_lots').update({current_qty:newQty}).eq('id',lot.id);lot.current_qty=newQty}renderPadlocks();renderTreso();renderFlux();renderStats();toast('Vente supprimée')})};
 window.markPadlockReceived=(id)=>{
   const s=S.padlockSales.find(x=>x.id===id);if(!s)return;
   S.pendingPadlocks.add(id);renderPadlocks();renderTreso();
