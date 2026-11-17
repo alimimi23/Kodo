@@ -894,19 +894,23 @@ el('btnAddBag').onclick=()=>openBagModal(null);
 el('bagSave').onclick=async()=>{
   const brand=el('bagBrand').value.trim(),model=el('bagModel').value.trim();
   if(!brand||!model){toast('Marque et modèle requis');return}
-  const data={brand,model,variant:el('bagVariant').value.trim()||null,serial_number:el('bagSerial').value.trim()||null,dimensions:el('bagDims').value.trim()||null,condition:el('bagCondition').value,buy_price:parseFloat(el('bagBuyPrice').value)||null,target_price:parseFloat(el('bagTargetPrice').value)||null,supplier:el('bagSupplier').value||null};
+  const newTarget=parseFloat(el('bagTargetPrice').value)||null;
+  const data={brand,model,variant:el('bagVariant').value.trim()||null,serial_number:el('bagSerial').value.trim()||null,dimensions:el('bagDims').value.trim()||null,condition:el('bagCondition').value,buy_price:parseFloat(el('bagBuyPrice').value)||null,target_price:newTarget,supplier:el('bagSupplier').value||null};
   const id=el('bagId').value;
   if(id){
+    const existing=S.bags.find(b=>b.id===id);
+    // Si sac listé et prix visé modifié → aligner le prix listé aussi
+    if(existing&&existing.status==='listed'&&newTarget!==existing.target_price){data.listed_price=newTarget}
     const {error}=await sb.from('bags').update(data).eq('id',id);
     if(error){toast('Erreur: '+error.message);return}
-    Object.assign(S.bags.find(b=>b.id===id),data);
+    Object.assign(existing,data);
   }else{
     data.status='stock';
     const {data:ins,error}=await sb.from('bags').insert([data]).select().single();
     if(error){toast('Erreur: '+error.message);return}
     S.bags.unshift(ins);
   }
-  closeModal('modalBag');renderStock();toast('Sac enregistré')
+  closeModal('modalBag');renderStock();renderTreso();toast('Sac enregistré')
 };
 
 function renderStock(){
