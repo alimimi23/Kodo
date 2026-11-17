@@ -910,7 +910,7 @@ el('bagSave').onclick=async()=>{
     if(error){toast('Erreur: '+error.message);return}
     S.bags.unshift(ins);
   }
-  closeModal('modalBag');renderStock();renderTreso();toast('Sac enregistré')
+  closeModal('modalBag');renderStock();renderTreso();renderFlux();renderPadlocks();toast('Sac enregistré')
 };
 
 function renderStock(){
