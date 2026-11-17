@@ -272,6 +272,7 @@ h1{font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.035em;color:va
         <button data-view="padlocks">Cadenas</button>
         <button data-view="calc">Calculs</button>
         <button data-view="flux">Flux</button>
+        <button data-view="stats">Stats</button>
       </nav>
       <div class="hdr-actions">
         <div class="user-badge" id="userBadge" title="Se déconnecter">
@@ -487,6 +488,68 @@ h1{font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.035em;color:va
             <strong id="aucTotal" style="font-size:28px;font-weight:700;letter-spacing:-0.025em">— €</strong>
           </div>
           <p style="font-size:11.5px;color:var(--text-subtle);margin-top:14px;line-height:1.5">Sous 12 500 ¥, 500 ¥ fixes s'ajoutent. TVA = 20 % × (valeur déclarée + port). Droits de douane et frais DHL non inclus.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="view" id="view-stats">
+      <div class="page-head">
+        <div><h1>Stats</h1><p class="sub">Bénéfices sacs + cadenas</p></div>
+      </div>
+      <div class="tres-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="tres-card">
+          <div class="tres-card-label">Bénef total estimé</div>
+          <div class="tres-card-value" id="statTotal">0 €</div>
+          <p style="font-size:11.5px;color:var(--text-subtle);margin-top:4px">Encaissé + potentiel</p>
+        </div>
+        <div class="tres-card">
+          <div class="tres-card-label">Bénef encaissé</div>
+          <div class="tres-card-value" id="statEncaisse" style="color:var(--status-listed)">0 €</div>
+          <p style="font-size:11.5px;color:var(--text-subtle);margin-top:4px"><span id="statEncaisseCount">0</span> items vendus</p>
+        </div>
+        <div class="tres-card">
+          <div class="tres-card-label">Bénef potentiel</div>
+          <div class="tres-card-value" id="statPotentiel" style="color:var(--accent)">0 €</div>
+          <p style="font-size:11.5px;color:var(--text-subtle);margin-top:4px"><span id="statPotentielCount">0</span> items en stock</p>
+        </div>
+      </div>
+
+      <div class="tres-section">
+        <div class="tres-section-head">
+          <div class="tres-section-title">Bénef encaissé par mois</div>
+          <div class="tres-section-total" id="statAvgMonth">Moy. 0 €/mois</div>
+        </div>
+        <canvas id="statChart" style="width:100%;height:220px;display:block"></canvas>
+        <div id="statMonths" style="margin-top:16px"></div>
+      </div>
+
+      <div class="tres-grid" style="grid-template-columns:1fr 1fr">
+        <div class="tres-section" style="margin:0">
+          <div class="tres-section-head">
+            <div class="tres-section-title">👜 Sacs</div>
+            <div class="tres-section-total" id="statBagsTotal">0 €</div>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px">
+            <span style="color:var(--text-muted)">Encaissé</span><span id="statBagsSold" style="text-align:right;color:var(--status-listed);font-weight:500">0 €</span>
+            <span style="color:var(--text-muted)">Potentiel</span><span id="statBagsPot" style="text-align:right;color:var(--accent);font-weight:500">0 €</span>
+            <span style="color:var(--text-muted)">Vendus</span><span id="statBagsCountSold" style="text-align:right">0</span>
+            <span style="color:var(--text-muted)">En stock/listés</span><span id="statBagsCountStock" style="text-align:right">0</span>
+            <span style="color:var(--text-muted)">Marge moy. vendu</span><span id="statBagsMargin" style="text-align:right">—</span>
+          </div>
+        </div>
+        <div class="tres-section" style="margin:0">
+          <div class="tres-section-head">
+            <div class="tres-section-title">🔒 Cadenas</div>
+            <div class="tres-section-total" id="statPadlocksTotal">0 €</div>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px">
+            <span style="color:var(--text-muted)">Encaissé</span><span id="statPadlocksSold" style="text-align:right;color:var(--status-listed);font-weight:500">0 €</span>
+            <span style="color:var(--text-muted)">Potentiel</span><span id="statPadlocksPot" style="text-align:right;color:var(--accent);font-weight:500">0 €</span>
+            <span style="color:var(--text-muted)">Vendus</span><span id="statPadlocksCountSold" style="text-align:right">0</span>
+            <span style="color:var(--text-muted)">En stock</span><span id="statPadlocksCountStock" style="text-align:right">0</span>
+            <span style="color:var(--text-muted)">Marge moy. vendu</span><span id="statPadlocksMargin" style="text-align:right">—</span>
+          </div>
         </div>
       </div>
     </section>
@@ -1349,6 +1412,109 @@ function renderTasks(){
   }).join('')
 }
 
+/* ============ STATS ============ */
+function renderStats(){
+  if(!el('statTotal'))return;
+  // Sacs
+  const bagsSold=S.bags.filter(b=>b.status==='sold');
+  const bagsStock=S.bags.filter(b=>b.status!=='sold');
+  const bagsSoldBenef=bagsSold.reduce((a,b)=>a+((b.sold_price||0)-(b.buy_price||0)),0);
+  const bagsPotBenef=bagsStock.reduce((a,b)=>a+((b.listed_price||b.target_price||0)-(b.buy_price||0)),0);
+  const bagsMargins=bagsSold.filter(b=>b.buy_price).map(b=>((b.sold_price||0)-b.buy_price)/b.buy_price*100);
+  const bagsAvgMargin=bagsMargins.length?Math.round(bagsMargins.reduce((a,x)=>a+x,0)/bagsMargins.length):0;
+  // Cadenas
+  const padSoldBenef=S.padlockSales.reduce((a,s)=>{
+    const lot=S.padlockLots.find(l=>l.id===s.lot_id);
+    const unitCost=lot&&lot.initial_qty?lot.buy_price_total/lot.initial_qty:0;
+    return a+((s.sale_price||0)-unitCost);
+  },0);
+  const padPotBenef=S.padlockLots.reduce((a,l)=>{
+    if(!l.initial_qty)return a;
+    const unitCost=l.buy_price_total/l.initial_qty;
+    const unitSell=lotAvgPrice(l);
+    return a+(unitSell-unitCost)*l.current_qty;
+  },0);
+  const padSoldCount=S.padlockSales.length;
+  const padStockCount=S.padlockLots.reduce((a,l)=>a+(l.current_qty||0),0);
+  const padMargins=S.padlockSales.filter(s=>{const l=S.padlockLots.find(x=>x.id===s.lot_id);return l&&l.initial_qty}).map(s=>{const l=S.padlockLots.find(x=>x.id===s.lot_id);const uc=l.buy_price_total/l.initial_qty;return uc?((s.sale_price-uc)/uc*100):0});
+  const padAvgMargin=padMargins.length?Math.round(padMargins.reduce((a,x)=>a+x,0)/padMargins.length):0;
+  // Totaux
+  const encaisse=bagsSoldBenef+padSoldBenef;
+  const potentiel=bagsPotBenef+padPotBenef;
+  const total=encaisse+potentiel;
+  const soldCount=bagsSold.length+padSoldCount;
+  const stockCount=bagsStock.length+padStockCount;
+  el('statTotal').textContent=fmt(total);
+  el('statEncaisse').textContent=fmt(encaisse);
+  el('statEncaisseCount').textContent=soldCount;
+  el('statPotentiel').textContent=fmt(potentiel);
+  el('statPotentielCount').textContent=stockCount;
+  el('statBagsTotal').textContent=fmt(bagsSoldBenef+bagsPotBenef);
+  el('statBagsSold').textContent=fmt(bagsSoldBenef);
+  el('statBagsPot').textContent=fmt(bagsPotBenef);
+  el('statBagsCountSold').textContent=bagsSold.length;
+  el('statBagsCountStock').textContent=bagsStock.length;
+  el('statBagsMargin').textContent=bagsMargins.length?bagsAvgMargin+' %':'—';
+  el('statPadlocksTotal').textContent=fmt(padSoldBenef+padPotBenef);
+  el('statPadlocksSold').textContent=fmt(padSoldBenef);
+  el('statPadlocksPot').textContent=fmt(padPotBenef);
+  el('statPadlocksCountSold').textContent=padSoldCount;
+  el('statPadlocksCountStock').textContent=padStockCount;
+  el('statPadlocksMargin').textContent=padMargins.length?padAvgMargin+' %':'—';
+  // Grouper par mois
+  const byMonth={};
+  bagsSold.forEach(b=>{if(!b.sold_at)return;const k=b.sold_at.slice(0,7);const benef=(b.sold_price||0)-(b.buy_price||0);if(!byMonth[k])byMonth[k]={benef:0,count:0};byMonth[k].benef+=benef;byMonth[k].count++});
+  S.padlockSales.forEach(s=>{if(!s.sale_date)return;const k=s.sale_date.slice(0,7);const lot=S.padlockLots.find(l=>l.id===s.lot_id);const uc=lot&&lot.initial_qty?lot.buy_price_total/lot.initial_qty:0;const benef=(s.sale_price||0)-uc;if(!byMonth[k])byMonth[k]={benef:0,count:0};byMonth[k].benef+=benef;byMonth[k].count++});
+  const months=Object.keys(byMonth).sort();
+  // Moyenne
+  const avg=months.length?encaisse/months.length:0;
+  el('statAvgMonth').textContent='Moy. '+fmt(avg)+'/mois';
+  // Liste mois
+  if(!months.length){el('statMonths').innerHTML='<div class="empty" style="padding:20px">Aucune vente encore. Marque des sacs ou cadenas comme vendus.</div>'}
+  else{
+    el('statMonths').innerHTML=months.slice().reverse().map(k=>{
+      const d=new Date(k+'-01');
+      const label=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'}).replace(/^./,c=>c.toUpperCase());
+      return `<div class="tres-row"><div class="tres-info"><div class="tres-desc">${label}</div><div class="tres-meta">${byMonth[k].count} vente${byMonth[k].count>1?'s':''}</div></div><div class="tres-amount pos" style="pointer-events:none">+${fmt2(byMonth[k].benef)}</div></div>`;
+    }).join('');
+  }
+  renderStatChart(months,byMonth);
+}
+function renderStatChart(months,byMonth){
+  const c=el('statChart');if(!c)return;
+  const ctx=c.getContext('2d');const w=c.offsetWidth,h=220;
+  c.width=w*devicePixelRatio;c.height=h*devicePixelRatio;ctx.scale(devicePixelRatio,devicePixelRatio);
+  ctx.clearRect(0,0,w,h);
+  if(!months.length){ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text-subtle');ctx.font='13px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText('Aucune donnée',w/2,h/2);return}
+  const values=months.map(m=>byMonth[m].benef);
+  const max=Math.max(...values,100);
+  const barW=Math.min(60,(w-60)/months.length-8);
+  const gap=((w-60)-barW*months.length)/(months.length-1||1);
+  const baseY=h-40;
+  ctx.font='11px -apple-system,sans-serif';ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text-subtle');
+  months.forEach((m,i)=>{
+    const x=30+i*(barW+gap);
+    const bh=(values[i]/max)*(baseY-20);
+    const g=ctx.createLinearGradient(0,baseY-bh,0,baseY);
+    g.addColorStop(0,'#5EC79E');g.addColorStop(1,'rgba(94,199,158,0.3)');
+    ctx.fillStyle=g;
+    const r=6;
+    ctx.beginPath();
+    ctx.moveTo(x,baseY);ctx.lineTo(x,baseY-bh+r);ctx.quadraticCurveTo(x,baseY-bh,x+r,baseY-bh);ctx.lineTo(x+barW-r,baseY-bh);ctx.quadraticCurveTo(x+barW,baseY-bh,x+barW,baseY-bh+r);ctx.lineTo(x+barW,baseY);ctx.closePath();
+    ctx.fill();
+    // Label mois
+    const d=new Date(m+'-01');
+    const label=d.toLocaleDateString('fr-FR',{month:'short'}).replace('.','');
+    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text-muted');
+    ctx.textAlign='center';
+    ctx.fillText(label,x+barW/2,baseY+16);
+    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text');
+    ctx.font='bold 11px -apple-system,sans-serif';
+    ctx.fillText(Math.round(values[i])+'€',x+barW/2,baseY-bh-6);
+    ctx.font='11px -apple-system,sans-serif';
+  });
+}
+
 /* ============ FLUX ============ */
 let prefsTimer;
 function syncPrefs(){
@@ -1757,7 +1923,7 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.
 document.querySelectorAll('.overlay').forEach(o=>o.onclick=e=>{if(e.target===o)o.classList.remove('open')});
 
 /* ============ INIT ============ */
-function renderAll(){renderStock();renderTreso();renderObj();renderCal();renderTasks();renderPadlocks();renderFlux();populateGenStock();populateTaskBags();populateDatalists();updateFreezeBtn();initCalculs();if(S.genTemplate)el('genTemplate').value=S.genTemplate}
+function renderAll(){renderStock();renderTreso();renderObj();renderCal();renderTasks();renderPadlocks();renderFlux();renderStats();populateGenStock();populateTaskBags();populateDatalists();updateFreezeBtn();initCalculs();if(S.genTemplate)el('genTemplate').value=S.genTemplate}
 window.addEventListener('resize',renderTrendChart);
 checkAuth();
 </script>
