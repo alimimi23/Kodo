@@ -1185,6 +1185,8 @@ function sortiesMoisCourant(){
       const d=new Date(e.date);if(d.getMonth()===month&&d.getFullYear()===year)total+=parseFloat(e.amount);
     }
   });
+  // + sorties perso (assumées récurrentes mensuelles)
+  S.personalExpenses.forEach(p=>{total+=parseFloat(p.amount||0)});
   return Math.round(total);
 }
 function rowHtml(m,i,treso,isCur){
